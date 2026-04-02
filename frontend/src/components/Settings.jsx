@@ -1,22 +1,31 @@
 import { useState, useEffect } from 'react';
 import './Settings.css';
 
-export default function Settings({ isOpen, onClose, userName, onSetUserName, theme, toggleTheme }) {
+export default function Settings({ isOpen, onClose, firstName, lastName, email, onSetAccountDetails, theme, toggleTheme }) {
   const [activeSection, setActiveSection] = useState('profile');
-  const [nameInput, setNameInput] = useState(userName);
+  const [firstNameInput, setFirstNameInput] = useState(firstName);
+  const [lastNameInput, setLastNameInput] = useState(lastName);
+  const [emailInput, setEmailInput] = useState(email);
   const [saveMsg, setSaveMsg] = useState('');
 
   useEffect(() => {
-    if (isOpen) setNameInput(userName);
-  }, [isOpen, userName]);
+    if (isOpen) {
+      setFirstNameInput(firstName);
+      setLastNameInput(lastName);
+      setEmailInput(email);
+    }
+  }, [isOpen, firstName, lastName, email]);
 
   const handleSave = () => {
-    if (nameInput.trim()) onSetUserName(nameInput.trim());
+    onSetAccountDetails({ firstName: firstNameInput, lastName: lastNameInput, email: emailInput });
     setSaveMsg('Saved!');
     setTimeout(() => setSaveMsg(''), 2000);
   };
 
   if (!isOpen) return null;
+
+  const displayInitial = (firstNameInput.trim() || firstName).charAt(0).toUpperCase();
+  const displayName = [firstNameInput.trim(), lastNameInput.trim()].filter(Boolean).join(' ') || 'User';
 
   const sections = [
     { id: 'profile', label: 'Profile' },
@@ -51,15 +60,47 @@ export default function Settings({ isOpen, onClose, userName, onSetUserName, the
           <div className="settings-content">
             {activeSection === 'profile' && (
               <div className="settings-section">
-                <h3 className="settings-section-title">Profile</h3>
+                <h3 className="settings-section-title">Account Details</h3>
+
+                <div className="profile-avatar-row">
+                  <div className="profile-avatar-preview">{displayInitial}</div>
+                  <div className="profile-avatar-meta">
+                    <div className="profile-avatar-name">{displayName}</div>
+                    {emailInput.trim() && (
+                      <div className="profile-avatar-email">{emailInput.trim()}</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="settings-fields-row">
+                  <div className="settings-field">
+                    <label className="settings-label">First Name</label>
+                    <input
+                      className="settings-input"
+                      value={firstNameInput}
+                      onChange={e => setFirstNameInput(e.target.value)}
+                      placeholder="First name"
+                    />
+                  </div>
+                  <div className="settings-field">
+                    <label className="settings-label">Last Name</label>
+                    <input
+                      className="settings-input"
+                      value={lastNameInput}
+                      onChange={e => setLastNameInput(e.target.value)}
+                      placeholder="Last name"
+                    />
+                  </div>
+                </div>
+
                 <div className="settings-field">
-                  <label className="settings-label">Display Name</label>
+                  <label className="settings-label">Email</label>
                   <input
                     className="settings-input"
-                    value={nameInput}
-                    onChange={e => setNameInput(e.target.value)}
-                    placeholder="Your name"
-                    onKeyDown={e => { if (e.key === 'Enter') handleSave(); }}
+                    type="email"
+                    value={emailInput}
+                    onChange={e => setEmailInput(e.target.value)}
+                    placeholder="you@example.com"
                   />
                 </div>
               </div>
@@ -96,16 +137,13 @@ export default function Settings({ isOpen, onClose, userName, onSetUserName, the
                 </div>
               </div>
             )}
-
           </div>
         </div>
 
         <div className="settings-footer">
           {saveMsg && <span className="settings-save-msg">{saveMsg}</span>}
           <button className="settings-cancel-btn" onClick={onClose}>Cancel</button>
-          <button className="settings-save-btn" onClick={handleSave} disabled={isSaving}>
-            {isSaving ? 'Saving…' : 'Save Changes'}
-          </button>
+          <button className="settings-save-btn" onClick={handleSave}>Save Changes</button>
         </div>
       </div>
     </div>
