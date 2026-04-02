@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import Settings from './components/Settings';
+import AuthPage from './components/AuthPage';
 import { api } from './api';
 import './App.css';
 
@@ -22,12 +23,38 @@ function App() {
   const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
 
   const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const [userName, setUserName] = useState(() => localStorage.getItem('userName') || 'User');
 
-  const handleSetUserName = (name) => {
-    const trimmed = name.trim() || 'User';
-    setUserName(trimmed);
-    localStorage.setItem('userName', trimmed);
+  const [authUser, setAuthUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('polyllm_auth')); } catch { return null; }
+  });
+  const [firstName, setFirstName] = useState(() => authUser?.firstName || 'User');
+  const [lastName, setLastName] = useState(() => authUser?.lastName || '');
+  const [email, setEmail] = useState(() => authUser?.email || '');
+
+  const userName = firstName + (lastName.trim() ? ' ' + lastName.trim() : '');
+
+  const handleAuth = (authData) => {
+    setAuthUser(authData);
+    setFirstName(authData.firstName);
+    setLastName(authData.lastName || '');
+    setEmail(authData.email);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('polyllm_auth');
+    setAuthUser(null);
+  };
+
+  const handleSetAccountDetails = ({ firstName: fn, lastName: ln, email: em }) => {
+    const trimFn = fn.trim() || 'User';
+    const trimLn = ln.trim();
+    const trimEm = em.trim();
+    setFirstName(trimFn);
+    setLastName(trimLn);
+    setEmail(trimEm);
+    const updated = { firstName: trimFn, lastName: trimLn, email: trimEm };
+    setAuthUser(updated);
+    localStorage.setItem('polyllm_auth', JSON.stringify(updated));
   };
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
@@ -247,6 +274,8 @@ function App() {
     }
   };
 
+  if (!authUser) return <AuthPage onAuth={handleAuth} />;
+
   return (
     <div className={`app ${isSidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
       {toast && (
@@ -266,10 +295,13 @@ function App() {
       <Settings
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        userName={userName}
-        onSetUserName={handleSetUserName}
+        firstName={firstName}
+        lastName={lastName}
+        email={email}
+        onSetAccountDetails={handleSetAccountDetails}
         theme={theme}
         toggleTheme={toggleTheme}
+        onSignOut={handleLogout}
       />
       <Sidebar
         conversations={conversations}
@@ -282,9 +314,6 @@ function App() {
         toggleSidebar={toggleSidebar}
         loadingIds={loadingIds}
         userName={userName}
-        onSetUserName={handleSetUserName}
-        theme={theme}
-        toggleTheme={toggleTheme}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onGoHome={() => setCurrentConversationId(null)}
       />

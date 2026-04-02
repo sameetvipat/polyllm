@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import './Settings.css';
 
-export default function Settings({ isOpen, onClose, firstName, lastName, email, onSetAccountDetails, theme, toggleTheme }) {
+export default function Settings({ isOpen, onClose, firstName, lastName, email, onSetAccountDetails, theme, toggleTheme, onSignOut }) {
   const [activeSection, setActiveSection] = useState('profile');
   const [firstNameInput, setFirstNameInput] = useState(firstName);
   const [lastNameInput, setLastNameInput] = useState(lastName);
@@ -102,6 +102,17 @@ export default function Settings({ isOpen, onClose, firstName, lastName, email, 
                     onChange={e => setEmailInput(e.target.value)}
                     placeholder="you@example.com"
                   />
+                </div>
+
+                <div className="settings-signout-row">
+                  <button className="settings-signout-btn" onClick={onSignOut}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="15" height="15" strokeWidth="2">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                      <polyline points="16 17 21 12 16 7"/>
+                      <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                    Sign Out
+                  </button>
                 </div>
               </div>
             )}

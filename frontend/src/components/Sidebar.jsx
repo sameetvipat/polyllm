@@ -134,50 +134,15 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
   );
 }
 
-function SidebarUserPanel({ userName, onSetUserName, theme, toggleTheme, onOpenSettings }) {
-  const [editing, setEditing] = useState(false);
-  const [nameInput, setNameInput] = useState(userName);
-
-  const submit = () => {
-    onSetUserName(nameInput);
-    setEditing(false);
-  };
-
+function SidebarUserPanel({ userName, onOpenSettings }) {
   return (
     <div className="sidebar-user-panel">
       <div className="sidebar-user-info">
         <div className="sidebar-avatar">{userName.trim().charAt(0).toUpperCase()}</div>
         <div className="sidebar-user-details">
-          {editing ? (
-            <input
-              className="sidebar-name-input"
-              autoFocus
-              value={nameInput}
-              onChange={e => setNameInput(e.target.value)}
-              onBlur={submit}
-              onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') setEditing(false); }}
-            />
-          ) : (
-            <span className="sidebar-username" onClick={() => { setNameInput(userName); setEditing(true); }}>
-              {userName}
-            </span>
-          )}
+          <span className="sidebar-username">{userName}</span>
         </div>
       </div>
-      <button className="sidebar-theme-btn" onClick={toggleTheme} title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-        {theme === 'dark' ? (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16">
-            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-        )}
-      </button>
       <button className="sidebar-settings-btn" onClick={onOpenSettings} title="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="16" height="16" strokeWidth="2">
           <circle cx="12" cy="12" r="3"/>
@@ -199,9 +164,6 @@ export default function Sidebar({
   toggleSidebar,
   loadingIds = new Set(),
   userName,
-  onSetUserName,
-  theme,
-  toggleTheme,
   onOpenSettings,
   onGoHome,
 }) {
@@ -304,7 +266,7 @@ export default function Sidebar({
       </div>
 
       <div className="sidebar-footer">
-        <SidebarUserPanel userName={userName} onSetUserName={onSetUserName} theme={theme} toggleTheme={toggleTheme} onOpenSettings={onOpenSettings} />
+        <SidebarUserPanel userName={userName} onOpenSettings={onOpenSettings} />
       </div>
     </div>
   );
