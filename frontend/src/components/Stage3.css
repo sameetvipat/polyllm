@@ -1,0 +1,81 @@
+.stage3 {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px dashed var(--border-subtle);
+}
+
+.stage3 .stage-title {
+  color: var(--highlight);
+  margin-bottom: 2rem;
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.final-response {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--border-active);
+  padding: 0;
+  position: relative;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* Removed ::before */
+
+.chairman-label {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 90%;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.2;
+  background: var(--border-active);
+  color: var(--text-primary);
+  padding: 0.3rem 1.5rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.final-content-wrapper {
+  background: var(--bg-app);
+  border-radius: calc(var(--radius-lg) - 2px);
+  padding: 2.5rem 2rem;
+  overflow-y: auto;
+  position: relative;
+  max-height: 400px;
+  transition: max-height 0.3s ease;
+}
+
+.stage3.expanded .final-content-wrapper {
+  max-height: none;
+}
+
+/* Add a subtle glow inside */
+.final-content-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 200px;
+  background: radial-gradient(circle at 50% 0%, rgba(189, 147, 249, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.final-text {
+  position: relative;
+  z-index: 1;
+}
+
+.final-text p {
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
