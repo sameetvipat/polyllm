@@ -14,10 +14,10 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Council members - list of OpenRouter model identifiers
 COUNCIL_MODELS = [
-    "liquid/lfm-2.5-1.2b-instruct:free",
-    "arcee-ai/trinity-large-preview:free",
-    "upstage/solar-pro-3:free",
-    "stepfun/step-3.5-flash:free",
+    "nousresearch/hermes-3-llama-3.1-405b", # Nous: Hermes 3 405B
+    "meta-llama/llama-3.3-70b-instruct",    # Meta: Llama 3.3 70B Instruct
+    "google/gemma-3-27b-it",                # Google: Gemma 3 27B
+    "google/gemma-3-12b-it"                 # Google: Gemma 3 12B (Fallback/Diversifier)
 ]
 
 # Chairman model - synthesizes final response via Google Gemini API directly

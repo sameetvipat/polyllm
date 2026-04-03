@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import './Sidebar.css';
 
 function parseDate(dateStr) {
@@ -38,7 +39,7 @@ function truncateText(text, maxLen = 40) {
   return text.substring(0, maxLen).trim() + '…';
 }
 
-function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, onRename }) {
+function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, onRename, index }) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
@@ -72,7 +73,13 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
   };
 
   return (
-    <div className={`conversation-item ${isActive ? 'active' : ''} ${menuOpen ? 'menu-open' : ''}`}>
+    <motion.div
+      className={`conversation-item ${isActive ? 'active' : ''} ${menuOpen ? 'menu-open' : ''}`}
+      initial={{ opacity: 0, x: -12 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: Math.min(index * 0.04, 0.3), duration: 0.28, ease: 'easeOut' }}
+      layout
+    >
       {isRenaming ? (
         <input
           className="rename-input"
@@ -110,27 +117,35 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
             <circle cx="12" cy="19" r="2" />
           </svg>
         </button>
-        {menuOpen && (
-          <div className="menu-dropdown menu-dropdown-open">
-            <button className="menu-item" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); startRename(e); }}>
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
-              </svg>
-              Rename
-            </button>
-            <button
-              className="menu-item delete-item"
-              onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(conv.id); }}
+        <AnimatePresence>
+          {menuOpen && (
+            <motion.div
+              className="menu-dropdown menu-dropdown-open"
+              initial={{ opacity: 0, scale: 0.92, y: -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: -4 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
             >
-              <svg viewBox="0 0 24 24" fill="currentColor">
-                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-              </svg>
-              Delete
-            </button>
-          </div>
-        )}
+              <button className="menu-item" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); startRename(e); }}>
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+                </svg>
+                Rename
+              </button>
+              <button
+                className="menu-item delete-item"
+                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(conv.id); }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                </svg>
+                Delete
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -214,25 +229,35 @@ export default function Sidebar({
             </svg>
           )}
         </div>
-        <button className="new-btn" onClick={onNewConversation}>
+        <motion.button
+          className="new-btn"
+          onClick={onNewConversation}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.97 }}
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
           </svg>
           <span>New Chat</span>
-        </button>
+        </motion.button>
       </div>
 
       <div className="conversation-list" style={{ flex: 1 }}>
         {conversations.length === 0 ? (
-          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <motion.div
+            style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
             No history yet
-          </div>
+          </motion.div>
         ) : (
           <>
             {todayConversations.length > 0 && (
               <div>
                 <div className="time-group-label">Today</div>
-                {todayConversations.map(conv => (
+                {todayConversations.map((conv, i) => (
                   <ConversationItem
                     key={conv.id}
                     conv={conv}
@@ -241,6 +266,7 @@ export default function Sidebar({
                     onSelect={onSelectConversation}
                     onDelete={onDeleteConversation}
                     onRename={onRenameConversation}
+                    index={i}
                   />
                 ))}
               </div>
@@ -248,7 +274,7 @@ export default function Sidebar({
             {pastConversations.length > 0 && (
               <div>
                 <div className="time-group-label">Past Conversations</div>
-                {pastConversations.map(conv => (
+                {pastConversations.map((conv, i) => (
                   <ConversationItem
                     key={conv.id}
                     conv={conv}
@@ -257,6 +283,7 @@ export default function Sidebar({
                     onSelect={onSelectConversation}
                     onDelete={onDeleteConversation}
                     onRename={onRenameConversation}
+                    index={todayConversations.length + i}
                   />
                 ))}
               </div>

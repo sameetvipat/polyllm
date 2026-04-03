@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import './AuthPage.css';
 
 function validateEmail(email) {
@@ -13,7 +14,7 @@ function getUsers() {
   try { return JSON.parse(localStorage.getItem('polyllm_users') || '[]'); } catch { return []; }
 }
 
-export default function AuthPage({ onAuth }) {
+export default function AuthPage({ onAuth, onBack }) {
   const [mode, setMode] = useState('login');
 
   // Login
@@ -50,7 +51,7 @@ export default function AuthPage({ onAuth }) {
 
     const authData = { firstName: user.firstName, lastName: user.lastName, email: user.email };
     localStorage.setItem('polyllm_auth', JSON.stringify(authData));
-    onAuth(authData);
+    onAuth(authData, false);
   };
 
   const handleSignup = (e) => {
@@ -81,7 +82,7 @@ export default function AuthPage({ onAuth }) {
 
     const authData = { firstName: newUser.firstName, lastName: newUser.lastName, email: newUser.email };
     localStorage.setItem('polyllm_auth', JSON.stringify(authData));
-    onAuth(authData);
+    onAuth(authData, true);
   };
 
   const clearLogin = () => { setLoginErrors({}); setLoginGeneralError(''); };
@@ -101,7 +102,20 @@ export default function AuthPage({ onAuth }) {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <motion.div
+        className="auth-card"
+        initial={{ opacity: 0, y: 24, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+      >
+        {onBack && (
+          <button className="auth-back-btn" onClick={onBack}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" width="15" height="15" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            Back to home
+          </button>
+        )}
         <div className="auth-logo">
           <img src="/Logo.png" alt="PolyLLM Council" className="auth-logo-img" />
           <span className="auth-logo-text">PolyLLM Council</span>
@@ -122,8 +136,18 @@ export default function AuthPage({ onAuth }) {
           </button>
         </div>
 
+        <AnimatePresence mode="wait">
         {mode === 'login' && (
-          <form className="auth-form" onSubmit={handleLogin} noValidate>
+          <motion.form
+            key="login"
+            className="auth-form"
+            onSubmit={handleLogin}
+            noValidate
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 16 }}
+            transition={{ duration: 0.22 }}
+          >
             {loginGeneralError && (
               <div className="auth-general-error">{loginGeneralError}</div>
             )}
@@ -167,11 +191,20 @@ export default function AuthPage({ onAuth }) {
                 Create one
               </button>
             </p>
-          </form>
+          </motion.form>
         )}
 
         {mode === 'signup' && (
-          <form className="auth-form" onSubmit={handleSignup} noValidate>
+          <motion.form
+            key="signup"
+            className="auth-form"
+            onSubmit={handleSignup}
+            noValidate
+            initial={{ opacity: 0, x: 16 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.22 }}
+          >
             <div className="auth-fields-row">
               <div className="auth-field">
                 <label className="auth-label">First Name</label>
@@ -256,9 +289,10 @@ export default function AuthPage({ onAuth }) {
                 Sign in
               </button>
             </p>
-          </form>
+          </motion.form>
         )}
-      </div>
+        </AnimatePresence>
+      </motion.div>
     </div>
   );
 }

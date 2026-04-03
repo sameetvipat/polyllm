@@ -123,7 +123,7 @@ export const api = {
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, onEvent) {
+  async sendMessageStream(conversationId, content, onEvent, signal) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
@@ -132,6 +132,7 @@ export const api = {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ content }),
+        signal,
       }
     );
 
@@ -142,24 +143,56 @@ export const api = {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    const abortHandler = () => {
+      reader.cancel().catch(() => {});
+    };
 
-      const chunk = decoder.decode(value);
-      const lines = chunk.split('\n');
+    if (signal) {
+      signal.addEventListener('abort', abortHandler);
+    }
 
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          try {
-            const event = JSON.parse(data);
-            onEvent(event.type, event);
-          } catch (e) {
-            console.error('Failed to parse SSE event:', e);
+    try {
+      while (true) {
+        if (signal?.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+        const { done, value } = await reader.read();
+        
+        if (signal?.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const event = JSON.parse(data);
+              onEvent(event.type, event);
+            } catch (e) {
+              console.error('Failed to parse SSE event:', e);
+            }
           }
         }
       }
+    } catch (e) {
+      if (e.name === 'AbortError' || signal?.aborted) {
+        console.log('Stream aborted');
+        throw new DOMException('Aborted', 'AbortError');
+      } else {
+        throw e;
+      }
+    } finally {
+      if (signal) {
+        signal.removeEventListener('abort', abortHandler);
+      }
+      try {
+        reader.releaseLock();
+      } catch (err) {}
     }
   },
 };

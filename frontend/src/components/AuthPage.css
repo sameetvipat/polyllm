@@ -20,6 +20,24 @@
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
 }
 
+.auth-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0 0 1.25rem 0;
+  transition: color 0.15s ease;
+}
+
+.auth-back-btn:hover {
+  color: var(--text-secondary);
+}
+
 .auth-logo {
   display: flex;
   align-items: center;

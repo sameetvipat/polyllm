@@ -9,6 +9,11 @@
   overflow: hidden;
   background: var(--bg-app);
   color: var(--text-primary);
+  --sidebar-w: 300px;
+}
+
+.app.sidebar-closed {
+  --sidebar-w: 64px;
 }
 
 .main-content {
