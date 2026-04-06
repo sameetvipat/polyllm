@@ -1,26 +1,44 @@
-"""JSON-based storage for conversations."""
+"""JSON-based storage for conversations and app settings."""
+
+# ─── Imports ─────────────────────────────────────────────────────────────────
 
 import json
 import os
+import time
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+
 from .config import DATA_DIR
 
 
+# ─── Constants ────────────────────────────────────────────────────────────────
+
+SETTINGS_PATH = Path(__file__).resolve().parent.parent / 'data' / 'settings.json'
+FIRST_MESSAGE_PREVIEW_LENGTH = 60
+_SETTINGS_TTL = 30.0
+
+_settings_cache: Optional[Dict[str, Any]] = None
+_settings_cache_time: float = 0.0
+
+
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+
 def ensure_data_dir():
-    """Ensure the data directory exists."""
+    """Ensure the conversations data directory exists."""
     Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 
 def get_conversation_path(conversation_id: str) -> str:
-    """Get the file path for a conversation."""
-    return os.path.join(DATA_DIR, f"{conversation_id}.json")
+    """Return the file path for a given conversation ID."""
+    return os.path.join(DATA_DIR, f'{conversation_id}.json')
 
+
+# ─── Conversation CRUD ────────────────────────────────────────────────────────
 
 def create_conversation(conversation_id: str) -> Dict[str, Any]:
     """
-    Create a new conversation.
+    Create and persist a new empty conversation.
 
     Args:
         conversation_id: Unique identifier for the conversation
@@ -31,13 +49,12 @@ def create_conversation(conversation_id: str) -> Dict[str, Any]:
     ensure_data_dir()
 
     conversation = {
-        "id": conversation_id,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "title": "New Conversation",
-        "messages": []
+        'id': conversation_id,
+        'created_at': datetime.now(timezone.utc).isoformat(),
+        'title': 'New Conversation',
+        'messages': []
     }
 
-    # Save to file
     path = get_conversation_path(conversation_id)
     with open(path, 'w') as f:
         json.dump(conversation, f, indent=2)
@@ -53,23 +70,22 @@ def get_conversation(conversation_id: str) -> Optional[Dict[str, Any]]:
         conversation_id: Unique identifier for the conversation
 
     Returns:
-        Conversation dict or None if not found
+        Conversation dict, or None if not found
     """
     path = get_conversation_path(conversation_id)
-
-    if not os.path.exists(path):
+    try:
+        with open(path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
         return None
-
-    with open(path, 'r') as f:
-        return json.load(f)
 
 
 def save_conversation(conversation: Dict[str, Any]):
     """
-    Save a conversation to storage.
+    Persist a conversation dict to its JSON file.
 
     Args:
-        conversation: Conversation dict to save
+        conversation: Conversation dict to save (must contain 'id')
     """
     ensure_data_dir()
 
@@ -80,59 +96,57 @@ def save_conversation(conversation: Dict[str, Any]):
 
 def list_conversations() -> List[Dict[str, Any]]:
     """
-    List all conversations (metadata only).
+    List all conversations as lightweight metadata (no message bodies).
 
     Returns:
-        List of conversation metadata dicts
+        List of conversation metadata dicts, sorted newest first
     """
     ensure_data_dir()
 
     conversations = []
     for filename in os.listdir(DATA_DIR):
-        if filename.endswith('.json'):
-            path = os.path.join(DATA_DIR, filename)
-            with open(path, 'r') as f:
-                data = json.load(f)
-                # Extract first user message for preview
-                first_message = ""
-                for msg in data.get("messages", []):
-                    if msg.get("role") == "user":
-                        first_message = msg.get("content", "")
-                        if len(first_message) > 60:
-                            first_message = first_message[:57] + "..."
-                        break
+        if not filename.endswith('.json'):
+            continue
 
-                # Return metadata only
-                conversations.append({
-                    "id": data["id"],
-                    "created_at": data["created_at"],
-                    "title": data.get("title", "New Conversation"),
-                    "message_count": len(data["messages"]),
-                    "first_message": first_message
-                })
+        path = os.path.join(DATA_DIR, filename)
+        with open(path, 'r') as f:
+            data = json.load(f)
 
-    # Sort by creation time, newest first
-    conversations.sort(key=lambda x: x["created_at"], reverse=True)
+        first_message = ''
+        for msg in data.get('messages', []):
+            if msg.get('role') == 'user':
+                raw = msg.get('content', '')
+                first_message = raw if len(raw) <= FIRST_MESSAGE_PREVIEW_LENGTH else raw[:57] + '...'
+                break
 
+        conversations.append({
+            'id': data['id'],
+            'created_at': data['created_at'],
+            'title': data.get('title', 'New Conversation'),
+            'message_count': len(data['messages']),
+            'first_message': first_message
+        })
+
+    conversations.sort(key=lambda x: x['created_at'], reverse=True)
     return conversations
 
 
 def add_user_message(conversation_id: str, content: str):
     """
-    Add a user message to a conversation.
+    Append a user message to an existing conversation.
 
     Args:
         conversation_id: Conversation identifier
-        content: User message content
+        content: User message text
     """
     conversation = get_conversation(conversation_id)
     if conversation is None:
-        raise ValueError(f"Conversation {conversation_id} not found")
+        raise ValueError(f'Conversation {conversation_id} not found')
 
-    conversation["messages"].append({
-        "role": "user",
-        "content": content,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+    conversation['messages'].append({
+        'role': 'user',
+        'content': content,
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
     save_conversation(conversation)
@@ -146,7 +160,7 @@ def add_assistant_message(
     metadata: Optional[Dict[str, Any]] = None
 ):
     """
-    Add an assistant message with all 3 stages to a conversation.
+    Append a multi-stage assistant message to an existing conversation.
 
     Args:
         conversation_id: Conversation identifier
@@ -157,15 +171,15 @@ def add_assistant_message(
     """
     conversation = get_conversation(conversation_id)
     if conversation is None:
-        raise ValueError(f"Conversation {conversation_id} not found")
+        raise ValueError(f'Conversation {conversation_id} not found')
 
-    conversation["messages"].append({
-        "role": "assistant",
-        "stage1": stage1,
-        "stage2": stage2,
-        "stage3": stage3,
-        "metadata": metadata,
-        "timestamp": datetime.now(timezone.utc).isoformat()
+    conversation['messages'].append({
+        'role': 'assistant',
+        'stage1': stage1,
+        'stage2': stage2,
+        'stage3': stage3,
+        'metadata': metadata,
+        'timestamp': datetime.now(timezone.utc).isoformat()
     })
 
     save_conversation(conversation)
@@ -173,50 +187,72 @@ def add_assistant_message(
 
 def update_conversation_title(conversation_id: str, title: str):
     """
-    Update the title of a conversation.
+    Update the display title of a conversation.
 
     Args:
         conversation_id: Conversation identifier
-        title: New title for the conversation
+        title: New title string
     """
     conversation = get_conversation(conversation_id)
     if conversation is None:
-        raise ValueError(f"Conversation {conversation_id} not found")
+        raise ValueError(f'Conversation {conversation_id} not found')
 
-    conversation["title"] = title
+    conversation['title'] = title
     save_conversation(conversation)
 
 
 def delete_conversation(conversation_id: str):
     """
-    Delete a conversation from storage.
+    Delete a conversation's JSON file from storage.
 
     Args:
         conversation_id: Conversation identifier
     """
     path = get_conversation_path(conversation_id)
-
-    if os.path.exists(path):
+    try:
         os.remove(path)
+    except FileNotFoundError:
+        pass
 
 
-SETTINGS_PATH = os.path.join("data", "settings.json")
-
+# ─── Settings ─────────────────────────────────────────────────────────────────
 
 def get_settings() -> Dict[str, Any]:
-    """Load app settings, falling back to config defaults."""
+    """
+    Load app settings from disk, falling back to config defaults.
+
+    Returns:
+        Settings dict with 'council_models', 'fallback_model', and 'chairman_model'
+    """
+    global _settings_cache, _settings_cache_time
+    if _settings_cache is not None and (time.time() - _settings_cache_time) < _SETTINGS_TTL:
+        return _settings_cache
+
     if os.path.exists(SETTINGS_PATH):
         with open(SETTINGS_PATH, 'r') as f:
-            return json.load(f)
-    from .config import COUNCIL_MODELS, GEMINI_CHAIRMAN_MODEL
-    return {
-        "council_models": COUNCIL_MODELS,
-        "chairman_model": GEMINI_CHAIRMAN_MODEL,
-    }
+            result = json.load(f)
+    else:
+        from .config import COUNCIL_MODELS, FALLBACK_MODEL
+        result = {
+            'council_models': COUNCIL_MODELS,
+            'fallback_model': FALLBACK_MODEL,
+        }
+
+    _settings_cache = result
+    _settings_cache_time = time.time()
+    return result
 
 
 def save_settings(settings: Dict[str, Any]):
-    """Save app settings to disk."""
-    Path("data").mkdir(parents=True, exist_ok=True)
+    """
+    Persist app settings to disk.
+
+    Args:
+        settings: Settings dict to save
+    """
+    global _settings_cache, _settings_cache_time
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(SETTINGS_PATH, 'w') as f:
         json.dump(settings, f, indent=2)
+    _settings_cache = settings
+    _settings_cache_time = time.time()

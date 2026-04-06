@@ -1,48 +1,68 @@
-import { useState, useEffect, useRef } from 'react';
+/* ─── Imports ────────────────────────────────────────────────────────────── */
+
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
 import './Sidebar.css';
 
+const SKELETON_KEYS = [1, 2, 3, 4];
+
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
+
+/**
+ * Parse a date string, treating naive UTC strings (no timezone suffix) as UTC.
+ * Prevents legacy backend timestamps from being misinterpreted as local time.
+ *
+ * @param {string} dateStr - ISO date string from the backend
+ * @returns {Date}
+ */
 function parseDate(dateStr) {
   if (!dateStr) return new Date();
 
-  // Handle naive UTC strings from legacy backend which are interpreted as local time by default
-  // If string has no 'Z' and no timezone offset (e.g. +00:00), treat as UTC
-  if (typeof dateStr === 'string' &&
+  if (
+    typeof dateStr === 'string' &&
     !dateStr.endsWith('Z') &&
     !dateStr.includes('+') &&
-    /^\d{4}-\d{2}-\d{2}T/.test(dateStr)) {
+    /^\d{4}-\d{2}-\d{2}T/.test(dateStr)
+  ) {
     return new Date(dateStr + 'Z');
   }
 
   return new Date(dateStr);
 }
 
-function getRelativeTime(dateStr) {
-  const now = new Date();
-  const date = parseDate(dateStr);
-  const diffMs = now - date;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
-
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-}
-
+/**
+ * Truncate text to a maximum length, appending an ellipsis if needed.
+ *
+ * @param {string} text - Input string
+ * @param {number} [maxLen=40] - Maximum character count
+ * @returns {string}
+ */
 function truncateText(text, maxLen = 40) {
   if (!text) return '';
   if (text.length <= maxLen) return text;
   return text.substring(0, maxLen).trim() + '…';
 }
 
+/* ─── Sub-components ─────────────────────────────────────────────────────── */
+
+/**
+ * A single conversation row with inline rename and a context menu for
+ * rename/delete actions.
+ *
+ * @param {Object} props
+ * @param {Object} props.conv - Conversation metadata object
+ * @param {boolean} props.isActive - Whether this is the currently selected conversation
+ * @param {boolean} props.isGenerating - Whether this conversation is streaming a response
+ * @param {Function} props.onSelect - Called with (id) when the row is clicked
+ * @param {Function} props.onDelete - Called with (id) to delete the conversation
+ * @param {Function} props.onRename - Called with (id, newTitle) to rename
+ * @param {number} props.index - Position in the list (used for staggered entrance animation)
+ */
 function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, onRename, index }) {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const menuRef = useRef(null);
 
   const startRename = (e) => {
@@ -56,25 +76,27 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
     setIsRenaming(false);
   };
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [menuOpen]);
-
   const handleRenameKeyDown = (e) => {
     if (e.key === 'Enter') submitRename();
     if (e.key === 'Escape') setIsRenaming(false);
   };
 
+  useEffect(() => {
+    if (!isMenuOpen) return;
+
+    const handleClickOutside = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isMenuOpen]);
+
   return (
     <motion.div
-      className={`conversation-item ${isActive ? 'active' : ''} ${menuOpen ? 'menu-open' : ''}`}
+      className={`conversation-item ${isActive ? 'active' : ''} ${isMenuOpen ? 'menu-open' : ''}`}
       initial={{ opacity: 0, x: -12 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ delay: Math.min(index * 0.04, 0.3), duration: 0.28, ease: 'easeOut' }}
@@ -105,11 +127,12 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
           </div>
         </div>
       )}
+
       <div className="conversation-menu" ref={menuRef}>
         <button
-          className={`menu-btn ${menuOpen ? 'active' : ''}`}
+          className={`menu-btn ${isMenuOpen ? 'active' : ''}`}
           aria-label="Conversation options"
-          onClick={(e) => { e.stopPropagation(); setMenuOpen(prev => !prev); }}
+          onClick={(e) => { e.stopPropagation(); setIsMenuOpen(prev => !prev); }}
         >
           <svg viewBox="0 0 24 24" fill="currentColor">
             <circle cx="12" cy="5" r="2" />
@@ -117,8 +140,9 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
             <circle cx="12" cy="19" r="2" />
           </svg>
         </button>
+
         <AnimatePresence>
-          {menuOpen && (
+          {isMenuOpen && (
             <motion.div
               className="menu-dropdown menu-dropdown-open"
               initial={{ opacity: 0, scale: 0.92, y: -4 }}
@@ -126,7 +150,10 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
               exit={{ opacity: 0, scale: 0.92, y: -4 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
             >
-              <button className="menu-item" onClick={(e) => { e.stopPropagation(); setMenuOpen(false); startRename(e); }}>
+              <button
+                className="menu-item"
+                onClick={(e) => { e.stopPropagation(); setIsMenuOpen(false); startRename(e); }}
+              >
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
                 </svg>
@@ -134,7 +161,7 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
               </button>
               <button
                 className="menu-item delete-item"
-                onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDelete(conv.id); }}
+                onClick={(e) => { e.stopPropagation(); setIsMenuOpen(false); onDelete(conv.id); }}
               >
                 <svg viewBox="0 0 24 24" fill="currentColor">
                   <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
@@ -149,6 +176,13 @@ function ConversationItem({ conv, isActive, isGenerating, onSelect, onDelete, on
   );
 }
 
+/**
+ * Bottom panel showing the logged-in user's avatar, name, and a settings button.
+ *
+ * @param {Object} props
+ * @param {string} props.userName - Full display name
+ * @param {Function} props.onOpenSettings - Called when the settings button is clicked
+ */
 function SidebarUserPanel({ userName, onOpenSettings }) {
   return (
     <div className="sidebar-user-panel">
@@ -168,6 +202,25 @@ function SidebarUserPanel({ userName, onOpenSettings }) {
   );
 }
 
+/* ─── Component ──────────────────────────────────────────────────────────── */
+
+/**
+ * Collapsible conversation history sidebar. Groups conversations by Today / Past.
+ *
+ * @param {Object} props
+ * @param {Array} props.conversations - List of conversation metadata objects
+ * @param {string|null} props.currentConversationId - ID of the active conversation
+ * @param {Function} props.onSelectConversation - Called with (id) to switch conversation
+ * @param {Function} props.onNewConversation - Called to create a new conversation
+ * @param {Function} props.onDeleteConversation - Called with (id) to delete
+ * @param {Function} props.onRenameConversation - Called with (id, title) to rename
+ * @param {boolean} props.isOpen - Whether the sidebar is in expanded state
+ * @param {Function} props.toggleSidebar - Called to toggle open/closed
+ * @param {Set} props.loadingIds - Set of conversation IDs currently generating
+ * @param {string} props.userName - Logged-in user's display name
+ * @param {Function} props.onOpenSettings - Called to open the settings modal
+ * @param {Function} props.onGoHome - Called to deselect the active conversation
+ */
 export default function Sidebar({
   conversations,
   currentConversationId,
@@ -178,25 +231,37 @@ export default function Sidebar({
   isOpen,
   toggleSidebar,
   loadingIds = new Set(),
+  isLoading = false,
   userName,
   onOpenSettings,
   onGoHome,
 }) {
-  const todayConversations = conversations.filter(conv => {
-    const date = parseDate(conv.created_at);
-    const now = new Date();
-    return date.getFullYear() === now.getFullYear() &&
-      date.getMonth() === now.getMonth() &&
-      date.getDate() === now.getDate();
-  });
+  const [searchQuery, setSearchQuery] = useState('');
+  const now = new Date();
 
-  const pastConversations = conversations.filter(conv => {
-    const date = parseDate(conv.created_at);
-    const now = new Date();
-    return !(date.getFullYear() === now.getFullYear() &&
+  const isToday = (dateStr) => {
+    const date = parseDate(dateStr);
+    return (
+      date.getFullYear() === now.getFullYear() &&
       date.getMonth() === now.getMonth() &&
-      date.getDate() === now.getDate());
-  });
+      date.getDate() === now.getDate()
+    );
+  };
+
+  const { todayConversations, pastConversations } = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    const filtered = query
+      ? conversations.filter(conv =>
+          (conv.title || '').toLowerCase().includes(query) ||
+          (conv.first_message || '').toLowerCase().includes(query)
+        )
+      : conversations;
+    return {
+      todayConversations: filtered.filter(conv => isToday(conv.created_at)),
+      pastConversations: filtered.filter(conv => !isToday(conv.created_at)),
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, searchQuery]);
 
   return (
     <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
@@ -229,6 +294,7 @@ export default function Sidebar({
             </svg>
           )}
         </div>
+
         <motion.button
           className="new-btn"
           onClick={onNewConversation}
@@ -242,8 +308,29 @@ export default function Sidebar({
         </motion.button>
       </div>
 
+      {isOpen && (
+        <div className="sidebar-search">
+          <input
+            className="sidebar-search-input"
+            type="text"
+            placeholder="Search conversations..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+      )}
+
       <div className="conversation-list" style={{ flex: 1 }}>
-        {conversations.length === 0 ? (
+        {isLoading ? (
+          <div className="skeleton-list">
+            {SKELETON_KEYS.map(i => (
+              <div key={i} className="skeleton-item">
+                <div className="skeleton-line skeleton-title" />
+                <div className="skeleton-line skeleton-meta" />
+              </div>
+            ))}
+          </div>
+        ) : conversations.length === 0 ? (
           <motion.div
             style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}
             initial={{ opacity: 0 }}
@@ -251,6 +338,14 @@ export default function Sidebar({
             transition={{ delay: 0.2 }}
           >
             No history yet
+          </motion.div>
+        ) : todayConversations.length === 0 && pastConversations.length === 0 ? (
+          <motion.div
+            style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+          >
+            No matches
           </motion.div>
         ) : (
           <>

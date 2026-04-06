@@ -1,30 +1,62 @@
-"""Configuration for the LLM Council."""
+"""Application configuration — all values pulled from environment variables.
+
+Import constants from here; never read os.getenv() in other modules.
+"""
+
+# ─── Imports ──────────────────────────────────────────────────────────────────
 
 import os
-from dotenv import load_dotenv
 from pathlib import Path
+from dotenv import load_dotenv
 
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / ".env")
+load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent / '.env')
 
-# OpenRouter API key
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# Google Gemini API key (for direct Gemini access in Stage 3)
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# ─── API Keys ─────────────────────────────────────────────────────────────────
 
-# Council members - list of OpenRouter model identifiers
+GROQ_API_KEY: str = os.getenv('GROQ_API_KEY', '')
+OPENROUTER_API_KEY: str = os.getenv('OPENROUTER_API_KEY', '')
+HF_API_TOKEN: str = os.getenv('HF_API_TOKEN', '')
+
+
+# ─── API Endpoints ────────────────────────────────────────────────────────────
+
+GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions'
+OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions'
+CUSTOM_CHAIRMAN_API_URL = (
+    'https://router.huggingface.co/hf-inference/models/sameetvipat/polyllm-chairman'
+)
+
+# Local mlx-lm server — start with: scripts/start_chairman.sh
+LOCAL_CHAIRMAN_URL = 'http://localhost:8002/v1/chat/completions'
+LOCAL_CHAIRMAN_MODEL = str(Path(__file__).resolve().parent.parent / 'models' / 'quantized')
+
+
+# ─── Council Model Registry ───────────────────────────────────────────────────
+
+# To add a new council model: add it here and to OPENROUTER_MODEL_IDS if it
+# routes via OpenRouter. No other files need to change.
+
 COUNCIL_MODELS = [
-    "nousresearch/hermes-3-llama-3.1-405b", # Nous: Hermes 3 405B
-    "meta-llama/llama-3.3-70b-instruct",    # Meta: Llama 3.3 70B Instruct
-    "google/gemma-3-27b-it",                # Google: Gemma 3 27B
-    "google/gemma-3-12b-it"                 # Google: Gemma 3 12B (Fallback/Diversifier)
+    'meta-llama/llama-4-scout-17b-16e-instruct',  # Meta      — Groq
+    'google/gemma-3-12b-it:free',                 # Google    — OpenRouter (free)
+    'nvidia/nemotron-3-super-120b-a12b:free',      # NVIDIA    — OpenRouter (free)
 ]
 
-# Chairman model - synthesizes final response via Google Gemini API directly
-GEMINI_CHAIRMAN_MODEL = "gemini-2.5-flash"
+# Models routed to OpenRouter instead of Groq
+OPENROUTER_MODEL_IDS: set = {
+    'google/gemma-3-12b-it:free',
+    'nvidia/nemotron-3-super-120b-a12b:free',
+    'openai/gpt-oss-20b:free',               # OpenAI OSS — OpenRouter (free)
+}
 
-# OpenRouter API endpoint
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+# Stage 3A reviewer — independent from all council members (OpenAI OSS via OpenRouter)
+REVIEW_MODEL = 'openai/gpt-oss-20b:free'
 
-# Data directory for conversation storage
-DATA_DIR = "data/conversations"
+# Fallback — substitutes for any council model that fails Stage 1
+FALLBACK_MODEL = 'llama-3.3-70b-versatile'
+
+
+# ─── Storage ──────────────────────────────────────────────────────────────────
+
+DATA_DIR = str(Path(__file__).resolve().parent.parent / 'data' / 'conversations')

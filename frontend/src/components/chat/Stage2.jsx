@@ -1,21 +1,14 @@
+/* ─── Imports ────────────────────────────────────────────────────────────── */
+
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import ReactMarkdown from 'react-markdown';
+
+import MarkdownContent from '../shared/MarkdownContent';
 import './Stage2.css';
 
-function deAnonymizeText(text, labelToModel) {
-  if (!labelToModel) return text;
+/* ─── Constants ──────────────────────────────────────────────────────────── */
 
-  let result = text;
-  // Replace each "Response X" with the actual model name
-  Object.entries(labelToModel).forEach(([label, model]) => {
-    const modelShortName = model.split('/')[1] || model;
-    result = result.replace(new RegExp(label, 'g'), `**${modelShortName}**`);
-  });
-  return result;
-}
-
-const leaderboardItemVariants = {
+const LEADERBOARD_ITEM_VARIANTS = {
   initial: { opacity: 0, x: -16 },
   animate: (i) => ({
     opacity: 1,
@@ -24,16 +17,46 @@ const leaderboardItemVariants = {
   }),
 };
 
+/* ─── Helpers ────────────────────────────────────────────────────────────── */
+
+/**
+ * Replace anonymous response labels ("Response A") with bolded model short-names
+ * for display in the review text. Original evaluation used anonymous labels.
+ *
+ * @param {string} text - Raw evaluation text
+ * @param {Object|null} labelToModel - Map of "Response X" → model identifier
+ * @returns {string} Text with labels replaced by **modelShortName**
+ */
+function deAnonymizeText(text, labelToModel) {
+  if (!labelToModel) return text;
+
+  let result = text;
+  Object.entries(labelToModel).forEach(([label, model]) => {
+    const modelShortName = model.split('/')[1] || model;
+    result = result.replace(new RegExp(label, 'g'), `**${modelShortName}**`);
+  });
+  return result;
+}
+
+/* ─── Component ──────────────────────────────────────────────────────────── */
+
+/**
+ * Displays Stage 2 peer rankings: a leaderboard of consensus scores and
+ * a tabbed panel of detailed critiques from each reviewer.
+ *
+ * @param {Object} props
+ * @param {Array} props.rankings - Stage 2 results, each with { model, ranking, parsed_ranking }
+ * @param {Object} props.labelToModel - Map of "Response X" → model identifier
+ * @param {Array} props.aggregateRankings - Pre-sorted aggregate ranking objects
+ */
 export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
-  // Select the first reviewer by default
   const [activeReviewerIndex, setActiveReviewerIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  if (!rankings || rankings.length === 0) {
-    return null;
-  }
+  if (!rankings || rankings.length === 0) return null;
 
-  const sortedAggregate = [...(aggregateRankings || [])].sort((a, b) => a.average_rank - b.average_rank);
+  // aggregateRankings arrives pre-sorted (lowest avg rank = best); use directly
+  const sortedAggregate = aggregateRankings || [];
 
   return (
     <motion.div
@@ -44,7 +67,7 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
     >
       <h3 className="stage-title">Stage 2: Peer Review &amp; Ranking</h3>
 
-      {/* 1. Leaderboard Section */}
+      {/* Leaderboard */}
       {sortedAggregate.length > 0 && (
         <motion.div
           className="leaderboard"
@@ -64,19 +87,15 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
                   key={idx}
                   className="leaderboard-item"
                   custom={idx}
-                  variants={leaderboardItemVariants}
+                  variants={LEADERBOARD_ITEM_VARIANTS}
                   initial="initial"
                   animate="animate"
                 >
-                  <div className={`rank-badge top-${rank}`}>
-                    {rank}
-                  </div>
+                  <div className={`rank-badge top-${rank}`}>{rank}</div>
                   <div className="model-info">
                     <span className="model-name">{modelName}</span>
                   </div>
-                  <div className="score-value">
-                    Avg: {agg.average_rank.toFixed(1)}
-                  </div>
+                  <div className="score-value">Avg: {agg.average_rank.toFixed(1)}</div>
                 </motion.div>
               );
             })}
@@ -84,10 +103,9 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
         </motion.div>
       )}
 
-      {/* 2. Detailed Reviews Section */}
+      {/* Detailed Critiques */}
       <h4 className="stage2-subtitle">Detailed Critiques</h4>
       <div className={`reviews-section ${isExpanded ? 'expanded' : ''}`}>
-        {/* Sidebar for selecting reviewer */}
         <div className="reviews-sidebar">
           {rankings.map((rank, index) => (
             <motion.button
@@ -105,7 +123,6 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
           ))}
         </div>
 
-        {/* Content Panel */}
         <div className="review-content-panel">
           <div
             className="reviewer-header"
@@ -127,28 +144,24 @@ export default function Stage2({ rankings, labelToModel, aggregateRankings }) {
               exit={{ opacity: 0, x: -10 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
-              {/* Parsed Ranking Display (if available) */}
-              {rankings[activeReviewerIndex].parsed_ranking &&
-                rankings[activeReviewerIndex].parsed_ranking.length > 0 && (
-                  <div className="parsed-ranking">
-                    <strong>Extracted Ranking:</strong>
-                    <ol>
-                      {rankings[activeReviewerIndex].parsed_ranking.map((label, i) => (
-                        <li key={i}>
-                          {labelToModel && labelToModel[label]
-                            ? labelToModel[label].split('/')[1] || labelToModel[label]
-                            : label}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
+              {rankings[activeReviewerIndex].parsed_ranking?.length > 0 && (
+                <div className="parsed-ranking">
+                  <strong>Extracted Ranking:</strong>
+                  <ol>
+                    {rankings[activeReviewerIndex].parsed_ranking.map((label, i) => (
+                      <li key={i}>
+                        {labelToModel?.[label]
+                          ? (labelToModel[label].split('/')[1] || labelToModel[label])
+                          : label}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              )}
 
-              <div className="ranking-content markdown-content">
-                <ReactMarkdown>
-                  {deAnonymizeText(rankings[activeReviewerIndex].ranking, labelToModel)}
-                </ReactMarkdown>
-              </div>
+              <MarkdownContent className="ranking-content markdown-content">
+                {deAnonymizeText(rankings[activeReviewerIndex].ranking, labelToModel)}
+              </MarkdownContent>
             </motion.div>
           </AnimatePresence>
         </div>

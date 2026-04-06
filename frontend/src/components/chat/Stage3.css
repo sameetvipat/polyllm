@@ -79,3 +79,79 @@
   font-size: 1.05rem;
   line-height: 1.7;
 }
+
+/* ── Split Stage 3 panels (new format) ────────────────────────────────────── */
+
+.chairman-panel {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.75rem 1.25rem;
+  background: var(--bg-card);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.panel-header:hover {
+  background: var(--bg-hover);
+}
+
+.panel-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
+.review-badge {
+  background: rgba(99, 179, 237, 0.18);
+  color: #63b3ed;
+}
+
+.verdict-badge {
+  background: rgba(104, 211, 145, 0.18);
+  color: var(--highlight);
+}
+
+.panel-model {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex: 1;
+}
+
+.panel-chevron {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.panel-body {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.panel-content {
+  padding: 1.5rem 1.75rem;
+  background: var(--bg-app);
+}
+
+.verdict-panel {
+  border-color: var(--border-active);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.verdict-panel .panel-header {
+  background: var(--bg-card);
+}

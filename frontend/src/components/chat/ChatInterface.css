@@ -399,7 +399,6 @@
   max-width: 900px;
   display: flex;
   gap: 1rem;
-  gap: 1rem;
   background: var(--bg-input);
   padding: 0.75rem;
   border-radius: var(--radius-lg);
@@ -497,4 +496,65 @@
   100% {
     transform: rotate(360deg);
   }
+}
+
+/* ─── Copy Button ─────────────────────────────────────────────────────────── */
+
+.copy-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s;
+  line-height: 1;
+}
+
+.message-content {
+  position: relative;
+}
+
+.message-content:hover .copy-btn {
+  opacity: 1;
+}
+
+.copy-btn:hover {
+  color: var(--text-primary);
+}
+
+/* ─── Example Prompt Chips ───────────────────────────────────────────────── */
+
+.example-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-top: 1.5rem;
+  max-width: 560px;
+  position: relative;
+  z-index: 2;
+}
+
+.example-prompt-chip {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  padding: 0.4rem 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+  text-align: left;
+}
+
+.example-prompt-chip:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: var(--bg-hover);
 }

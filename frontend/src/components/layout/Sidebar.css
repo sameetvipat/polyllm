@@ -479,3 +479,65 @@
   background: rgba(255, 255, 255, 0.1);
   color: #ff6b6b;
 }
+
+/* ─── Search ─────────────────────────────────────────────────────────────── */
+
+.sidebar-search {
+  padding: 0 1.25rem 0.75rem;
+}
+
+.sidebar-search-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  font-family: inherit;
+  padding: 0.45rem 0.75rem;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.sidebar-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.sidebar-search-input:focus {
+  border-color: var(--accent);
+}
+
+/* ─── Loading Skeleton ───────────────────────────────────────────────────── */
+
+.skeleton-list {
+  padding: 0.5rem 0;
+}
+
+.skeleton-item {
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.skeleton-line {
+  background: var(--border-subtle);
+  border-radius: 4px;
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-title {
+  height: 12px;
+  width: 75%;
+}
+
+.skeleton-meta {
+  height: 10px;
+  width: 40%;
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.9; }
+}

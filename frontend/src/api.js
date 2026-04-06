@@ -2,88 +2,72 @@
  * API client for the LLM Council backend.
  */
 
+/* ─── Config ─────────────────────────────────────────────────────────────── */
+
 const API_BASE = 'http://localhost:8001';
+
+/* ─── Client ─────────────────────────────────────────────────────────────── */
 
 export const api = {
   /**
-   * List all conversations.
+   * List all conversations (metadata only).
+   *
+   * @returns {Promise<Array>} Array of conversation metadata objects
    */
   async listConversations() {
     const response = await fetch(`${API_BASE}/api/conversations`);
-    if (!response.ok) {
-      throw new Error('Failed to list conversations');
-    }
+    if (!response.ok) throw new Error('Failed to list conversations');
     return response.json();
   },
 
   /**
-   * Create a new conversation.
+   * Create a new empty conversation.
+   *
+   * @returns {Promise<Object>} Newly created conversation object
    */
   async createConversation() {
     const response = await fetch(`${API_BASE}/api/conversations`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
-    if (!response.ok) {
-      throw new Error('Failed to create conversation');
-    }
+    if (!response.ok) throw new Error('Failed to create conversation');
     return response.json();
   },
 
   /**
-   * Get a specific conversation.
+   * Get a specific conversation with all its messages.
+   *
+   * @param {string} conversationId - The conversation UUID
+   * @returns {Promise<Object>} Full conversation object
    */
   async getConversation(conversationId) {
-    const response = await fetch(
-      `${API_BASE}/api/conversations/${conversationId}`
-    );
-    if (!response.ok) {
-      throw new Error('Failed to get conversation');
-    }
+    const response = await fetch(`${API_BASE}/api/conversations/${conversationId}`);
+    if (!response.ok) throw new Error('Failed to get conversation');
     return response.json();
   },
 
   /**
-   * Send a message in a conversation.
-   */
-  async sendMessage(conversationId, content) {
-    const response = await fetch(
-      `${API_BASE}/api/conversations/${conversationId}/message`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content }),
-      }
-    );
-    if (!response.ok) {
-      throw new Error('Failed to send message');
-    }
-    return response.json();
-  },
-
-  /**
-   * Delete a conversation.
+   * Delete a conversation permanently.
+   *
+   * @param {string} conversationId - The conversation UUID
+   * @returns {Promise<Object>} Deletion confirmation object
    */
   async deleteConversation(conversationId) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}`,
-      {
-        method: 'DELETE',
-      }
+      { method: 'DELETE' }
     );
-    if (!response.ok) {
-      throw new Error('Failed to delete conversation');
-    }
+    if (!response.ok) throw new Error('Failed to delete conversation');
     return response.json();
   },
 
   /**
    * Rename a conversation.
+   *
+   * @param {string} conversationId - The conversation UUID
+   * @param {string} title - New title string
+   * @returns {Promise<Object>} Update confirmation object
    */
   async renameConversation(conversationId, title) {
     const response = await fetch(
@@ -94,18 +78,27 @@ export const api = {
         body: JSON.stringify({ title }),
       }
     );
-    if (!response.ok) {
-      throw new Error('Failed to rename conversation');
-    }
+    if (!response.ok) throw new Error('Failed to rename conversation');
     return response.json();
   },
 
+  /**
+   * Get the current council configuration (models, chairman).
+   *
+   * @returns {Promise<Object>} Config object with council_models and chairman_model
+   */
   async getConfig() {
     const response = await fetch(`${API_BASE}/api/config`);
     if (!response.ok) throw new Error('Failed to get config');
     return response.json();
   },
 
+  /**
+   * Save updated council configuration.
+   *
+   * @param {Object} config - Config object with council_models and chairman_model
+   * @returns {Promise<Object>} Update confirmation object
+   */
   async saveConfig(config) {
     const response = await fetch(`${API_BASE}/api/config`, {
       method: 'PUT',
@@ -117,10 +110,12 @@ export const api = {
   },
 
   /**
-   * Send a message and receive streaming updates.
-   * @param {string} conversationId - The conversation ID
-   * @param {string} content - The message content
-   * @param {function} onEvent - Callback function for each event: (eventType, data) => void
+   * Send a message and receive streaming Server-Sent Events as each stage completes.
+   *
+   * @param {string} conversationId - The conversation UUID
+   * @param {string} content - The message text
+   * @param {Function} onEvent - Callback invoked for each SSE event: (eventType, eventData) => void
+   * @param {AbortSignal} [signal] - Optional AbortSignal to cancel the stream
    * @returns {Promise<void>}
    */
   async sendMessageStream(conversationId, content, onEvent, signal) {
@@ -128,20 +123,35 @@ export const api = {
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content }),
         signal,
       }
     );
 
-    if (!response.ok) {
-      throw new Error('Failed to send message');
-    }
+    if (!response.ok) throw new Error('Failed to send message');
+
+    if (!response.body) throw new Error('Streaming response body missing');
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
+    let buffer = '';
+
+    const processEventBlock = (block) => {
+      const dataLines = block
+        .split('\n')
+        .filter(line => line.startsWith('data: '))
+        .map(line => line.slice(6));
+
+      if (dataLines.length === 0) return;
+
+      try {
+        const event = JSON.parse(dataLines.join('\n'));
+        onEvent(event.type, event);
+      } catch {
+        // Ignore malformed event blocks silently
+      }
+    };
 
     const abortHandler = () => {
       reader.cancel().catch(() => {});
@@ -153,46 +163,36 @@ export const api = {
 
     try {
       while (true) {
-        if (signal?.aborted) {
-          throw new DOMException('Aborted', 'AbortError');
-        }
-        const { done, value } = await reader.read();
-        
-        if (signal?.aborted) {
-          throw new DOMException('Aborted', 'AbortError');
-        }
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
 
+        const { done, value } = await reader.read();
+
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            try {
-              const event = JSON.parse(data);
-              onEvent(event.type, event);
-            } catch (e) {
-              console.error('Failed to parse SSE event:', e);
-            }
-          }
+        // SSE events are separated by a blank line.
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
+
+        for (const block of blocks) {
+          processEventBlock(block);
         }
+      }
+
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        processEventBlock(buffer);
       }
     } catch (e) {
       if (e.name === 'AbortError' || signal?.aborted) {
-        console.log('Stream aborted');
         throw new DOMException('Aborted', 'AbortError');
-      } else {
-        throw e;
       }
+      throw e;
     } finally {
-      if (signal) {
-        signal.removeEventListener('abort', abortHandler);
-      }
-      try {
-        reader.releaseLock();
-      } catch (err) {}
+      if (signal) signal.removeEventListener('abort', abortHandler);
+      try { reader.releaseLock(); } catch { /* already released */ }
     }
   },
 };

@@ -1,9 +1,14 @@
+/* ─── Imports ────────────────────────────────────────────────────────────── */
+
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import ReactMarkdown from 'react-markdown';
+import CopyButton from '../shared/CopyButton';
+import MarkdownContent from '../shared/MarkdownContent';
 import './Stage1.css';
 
-const cardVariants = {
+/* ─── Constants ──────────────────────────────────────────────────────────── */
+
+const CARD_VARIANTS = {
   initial: { opacity: 0, y: 20, scale: 0.97 },
   animate: (i) => ({
     opacity: 1,
@@ -17,19 +22,15 @@ const cardVariants = {
   }),
 };
 
+/* ─── Component ──────────────────────────────────────────────────────────── */
+
 export default function Stage1({ responses }) {
   const [expandedIndex, setExpandedIndex] = useState(null);
 
-  if (!responses || responses.length === 0) {
-    return null;
-  }
+  if (!responses || responses.length === 0) return null;
 
   const toggleExpand = (index) => {
-    if (expandedIndex === index) {
-      setExpandedIndex(null);
-    } else {
-      setExpandedIndex(index);
-    }
+    setExpandedIndex(expandedIndex === index ? null : index);
   };
 
   return (
@@ -51,7 +52,7 @@ export default function Stage1({ responses }) {
               key={index}
               className={`response-card ${isExpanded ? 'active expanded' : ''}`}
               custom={index}
-              variants={cardVariants}
+              variants={CARD_VARIANTS}
               initial="initial"
               animate="animate"
               whileHover={!isExpanded ? { y: -3, transition: { duration: 0.2 } } : {}}
@@ -65,17 +66,15 @@ export default function Stage1({ responses }) {
                   </div>
                   {modelName}
                 </div>
-                <motion.div
-                  className="expand-hint"
-                  animate={{ opacity: 1 }}
-                >
-                  {isExpanded ? 'Collapse' : 'Expand'}
-                </motion.div>
+                <div className="card-header-actions">
+                  <CopyButton text={resp.response} className="card-copy-btn" size={13} stopPropagation />
+                  <motion.div className="expand-hint" animate={{ opacity: 1 }}>
+                    {isExpanded ? 'Collapse' : 'Expand'}
+                  </motion.div>
+                </div>
               </div>
 
-              <div className="card-content markdown-content">
-                <ReactMarkdown>{resp.response}</ReactMarkdown>
-              </div>
+              <MarkdownContent className="card-content markdown-content">{resp.response}</MarkdownContent>
             </motion.div>
           );
         })}

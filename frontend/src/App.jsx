@@ -1,42 +1,65 @@
+/* ─── Imports ────────────────────────────────────────────────────────────── */
+
 import { useState, useEffect, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import Sidebar from './components/Sidebar';
-import ChatInterface from './components/ChatInterface';
-import Settings from './components/Settings';
-import AuthPage from './components/AuthPage';
-import LandingPage from './components/LandingPage';
+
+import Sidebar from './components/layout/Sidebar';
+import ChatInterface from './components/chat/ChatInterface';
+import Settings from './components/settings/Settings';
+import AuthPage from './components/auth/AuthPage';
+import LandingPage from './components/auth/LandingPage';
 import { api } from './api';
 import './App.css';
 
-const pageFade = {
+/* ─── Constants ──────────────────────────────────────────────────────────── */
+
+const PAGE_FADE = {
   initial: { opacity: 0 },
   animate: { opacity: 1, transition: { duration: 0.35, ease: 'easeOut' } },
   exit: { opacity: 0, transition: { duration: 0.25, ease: 'easeIn' } },
 };
 
+const TOAST_DURATION_MS = 10000;
+const THEME_TRANSITION_DURATION_MS = 400;
+
+/* ─── Component ──────────────────────────────────────────────────────────── */
+
+/**
+ * Root application component. Manages auth flow, conversation state,
+ * streaming message handling, and theme.
+ */
 function App() {
+  /* ── Conversations ─────────────────────────────────────────────────────── */
+
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
-  // Map of id -> full conversation data (keyed so background streams update the right one)
   const [conversationsMap, setConversationsMap] = useState({});
-  // Set of conversation IDs currently being generated
   const [loadingIds, setLoadingIds] = useState(new Set());
+  const [isConversationsLoading, setIsConversationsLoading] = useState(true);
   const abortControllersRef = useRef({});
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [toast, setToast] = useState(null); // { conversationId, title }
 
   const currentConversation = conversationsMap[currentConversationId] || null;
-  const isLoading = loadingIds.has(currentConversationId);
+  const isCurrentConvLoading = loadingIds.has(currentConversationId);
+
+  /* ── UI State ──────────────────────────────────────────────────────────── */
+
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [toast, setToast] = useState(null); // shape: { conversationId, title }
 
   const toggleSidebar = () => setIsSidebarOpen(prev => !prev);
 
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+  /* ── Auth ──────────────────────────────────────────────────────────────── */
 
   const [authUser, setAuthUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('polyllm_auth')); } catch { return null; }
+    try {
+      return JSON.parse(localStorage.getItem('polyllm_auth'));
+    } catch {
+      return null;
+    }
   });
-  const [showAuth, setShowAuth] = useState(false);
+
+  const [isShowingAuth, setIsShowingAuth] = useState(false);
   const [isNewUser, setIsNewUser] = useState(false);
   const [firstName, setFirstName] = useState(() => authUser?.firstName || 'User');
   const [lastName, setLastName] = useState(() => authUser?.lastName || '');
@@ -67,40 +90,75 @@ function App() {
     const updated = { firstName: trimFn, lastName: trimLn, email: trimEm };
     setAuthUser(updated);
     localStorage.setItem('polyllm_auth', JSON.stringify(updated));
+
+    // Keep polyllm_users in sync so the updated name persists across sign-outs
+    try {
+      const users = JSON.parse(localStorage.getItem('polyllm_users') || '[]');
+      const idx = users.findIndex(u => u.email.toLowerCase() === email.toLowerCase());
+      if (idx !== -1) {
+        users[idx] = { ...users[idx], firstName: trimFn, lastName: trimLn, email: trimEm };
+        localStorage.setItem('polyllm_users', JSON.stringify(users));
+      }
+    } catch {
+      // polyllm_users missing or malformed — polyllm_auth update above is sufficient
+    }
   };
+
+  /* ── Theme ─────────────────────────────────────────────────────────────── */
+
+  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  // Warm up theme-transitioning styles so first toggle isn't laggy
   useEffect(() => {
+    // Warm up theme-transition styles so the first toggle isn't laggy
     document.documentElement.classList.add('theme-transitioning');
     requestAnimationFrame(() => {
       document.documentElement.classList.remove('theme-transitioning');
     });
   }, []);
+
   const toggleTheme = () => {
     document.documentElement.classList.add('theme-transitioning');
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-    setTimeout(() => document.documentElement.classList.remove('theme-transitioning'), 400);
+    setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
+    setTimeout(
+      () => document.documentElement.classList.remove('theme-transitioning'),
+      THEME_TRANSITION_DURATION_MS
+    );
   };
+
+  /* ── Toast ─────────────────────────────────────────────────────────────── */
 
   const triggerToast = (conversationId) => {
     const conv = conversations.find(c => c.id === conversationId);
     const title = conv?.title && conv.title !== 'New Conversation' ? conv.title : 'a chat';
-    setToast({ conversationId, title });
-    setTimeout(() => setToast(null), 10000);
+    setToast({ type: 'success', conversationId, title });
+    setTimeout(() => setToast(null), TOAST_DURATION_MS);
   };
 
-  // Helper: update a specific conversation in the map by ID
+  const triggerErrorToast = (message) => {
+    setToast({ type: 'error', message });
+    setTimeout(() => setToast(null), TOAST_DURATION_MS);
+  };
+
+  /* ── Conversation Helpers ──────────────────────────────────────────────── */
+
   const updateConvById = (id, updater) => {
     setConversationsMap(prev => {
-      const conv = prev[id];
-      if (!conv) return prev;
+      const conv = prev[id] || {
+        id,
+        created_at: new Date().toISOString(),
+        title: 'New Conversation',
+        messages: [],
+      };
       return { ...prev, [id]: updater(conv) };
     });
   };
+
+  /* ── Data Loading ──────────────────────────────────────────────────────── */
 
   useEffect(() => { loadConversations(); }, []);
 
@@ -114,8 +172,10 @@ function App() {
     try {
       const convs = await api.listConversations();
       setConversations(convs);
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
+    } catch {
+      // silently ignore — UI shows empty state
+    } finally {
+      setIsConversationsLoading(false);
     }
   };
 
@@ -123,10 +183,12 @@ function App() {
     try {
       const conv = await api.getConversation(id);
       setConversationsMap(prev => ({ ...prev, [id]: conv }));
-    } catch (error) {
-      console.error('Failed to load conversation:', error);
+    } catch {
+      // silently ignore — conversation stays in cache
     }
   };
+
+  /* ── Conversation Actions ──────────────────────────────────────────────── */
 
   const handleNewConversation = async () => {
     try {
@@ -137,8 +199,8 @@ function App() {
       ]);
       setConversationsMap(prev => ({ ...prev, [newConv.id]: newConv }));
       setCurrentConversationId(newConv.id);
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
+    } catch {
+      // silently ignore
     }
   };
 
@@ -149,9 +211,11 @@ function App() {
   const handleRenameConversation = async (id, newTitle) => {
     try {
       await api.renameConversation(id, newTitle);
-      setConversations(prev => prev.map(c => c.id === id ? { ...c, title: newTitle } : c));
-    } catch (error) {
-      console.error('Failed to rename conversation:', error);
+      setConversations(prev =>
+        prev.map(c => (c.id === id ? { ...c, title: newTitle } : c))
+      );
+    } catch {
+      // silently ignore
     }
   };
 
@@ -164,15 +228,13 @@ function App() {
         delete next[id];
         return next;
       });
-      if (id === currentConversationId) {
-        setCurrentConversationId(null);
-      }
-    } catch (error) {
-      console.error('Failed to delete conversation:', error);
+      if (id === currentConversationId) setCurrentConversationId(null);
+    } catch {
+      // silently ignore
     }
   };
 
-  // Create a new conversation and immediately send the first message (used from empty state)
+  // Create a new conversation and immediately send the first message (home screen shortcut)
   const handleStartConversation = async (content) => {
     try {
       const newConv = await api.createConversation();
@@ -183,111 +245,117 @@ function App() {
       ]);
       setConversationsMap(prev => ({ ...prev, [convId]: newConv }));
       setCurrentConversationId(convId);
-      // Send immediately using convId directly — don't wait for state to settle
+      // Use convId directly — don't wait for state to settle
       await handleSendMessage(content, convId);
-    } catch (error) {
-      console.error('Failed to start conversation:', error);
+    } catch {
+      // silently ignore
     }
   };
 
-  const handleSendMessage = async (content, conversationIdOverride = null) => {
-    const resolvedId = conversationIdOverride ?? currentConversationId;
-    if (!resolvedId) return;
+  /* ── Message Streaming ─────────────────────────────────────────────────── */
 
-    // Capture ID at the time of sending — stays correct even if user switches chat
-    const conversationId = resolvedId;
+  const handleSendMessage = async (content, conversationIdOverride = null) => {
+    const conversationId = conversationIdOverride ?? currentConversationId;
+    if (!conversationId) return;
 
     const abortController = new AbortController();
     abortControllersRef.current[conversationId] = abortController;
     setLoadingIds(prev => new Set(prev).add(conversationId));
 
-    try {
-      // Optimistically add user message
-      const userMessage = { role: 'user', content, timestamp: new Date().toISOString() };
-      updateConvById(conversationId, conv => ({
-        ...conv,
-        messages: [...conv.messages, userMessage],
-      }));
+    // Optimistically add user message
+    const userMessage = { role: 'user', content, timestamp: new Date().toISOString() };
+    updateConvById(conversationId, conv => ({
+      ...conv,
+      messages: [...conv.messages, userMessage],
+    }));
 
-      setConversations(prev => prev.map(c => {
+    setConversations(prev =>
+      prev.map(c => {
         if (c.id === conversationId && !c.first_message && (!c.message_count || c.message_count === 0)) {
           return { ...c, first_message: content, message_count: 1 };
         }
         return c;
-      }));
+      })
+    );
 
-      // Add partial assistant message
-      const assistantMessage = {
-        role: 'assistant',
-        stage1: null,
-        stage2: null,
-        stage3: null,
-        metadata: null,
-        loading: { stage1: false, stage2: false, stage3: false },
-      };
+    // Add placeholder assistant message with loading flags
+    const assistantMessage = {
+      role: 'assistant',
+      stage1: null,
+      stage2: null,
+      stage3: null,
+      metadata: null,
+      loading: { stage1: false, stage2: false, stage3: false },
+    };
+    updateConvById(conversationId, conv => ({
+      ...conv,
+      messages: [...conv.messages, assistantMessage],
+    }));
+
+    const markLoading = (stage) =>
       updateConvById(conversationId, conv => ({
         ...conv,
-        messages: [...conv.messages, assistantMessage],
+        messages: conv.messages.map((m, i) =>
+          i === conv.messages.length - 1
+            ? { ...m, loading: { ...m.loading, [stage]: true } }
+            : m
+        ),
       }));
 
+    const removeLoadingIds = () => {
+      setLoadingIds(prev => {
+        const next = new Set(prev);
+        next.delete(conversationId);
+        return next;
+      });
+    };
+
+    try {
       await api.sendMessageStream(conversationId, content, (eventType, event) => {
         switch (eventType) {
           case 'stage1_start':
-            updateConvById(conversationId, conv => {
-              const messages = conv.messages.map((m, i) =>
-                i === conv.messages.length - 1 ? { ...m, loading: { ...m.loading, stage1: true } } : m
-              );
-              return { ...conv, messages };
-            });
+            markLoading('stage1');
             break;
 
           case 'stage1_complete':
-            updateConvById(conversationId, conv => {
-              const messages = conv.messages.map((m, i) =>
-                i === conv.messages.length - 1 ? { ...m, stage1: event.data, loading: { ...m.loading, stage1: false } } : m
-              );
-              return { ...conv, messages };
-            });
+            updateConvById(conversationId, conv => ({
+              ...conv,
+              messages: conv.messages.map((m, i) =>
+                i === conv.messages.length - 1
+                  ? { ...m, stage1: event.data, loading: { ...m.loading, stage1: false } }
+                  : m
+              ),
+            }));
             break;
 
           case 'stage2_start':
-            updateConvById(conversationId, conv => {
-              const messages = conv.messages.map((m, i) =>
-                i === conv.messages.length - 1 ? { ...m, loading: { ...m.loading, stage2: true } } : m
-              );
-              return { ...conv, messages };
-            });
+            markLoading('stage2');
             break;
 
           case 'stage2_complete':
-            updateConvById(conversationId, conv => {
-              const messages = conv.messages.map((m, i) =>
+            updateConvById(conversationId, conv => ({
+              ...conv,
+              messages: conv.messages.map((m, i) =>
                 i === conv.messages.length - 1
                   ? { ...m, stage2: event.data, metadata: event.metadata, loading: { ...m.loading, stage2: false } }
                   : m
-              );
-              return { ...conv, messages };
-            });
+              ),
+            }));
             break;
 
           case 'stage3_start':
-            updateConvById(conversationId, conv => {
-              const messages = conv.messages.map((m, i) =>
-                i === conv.messages.length - 1 ? { ...m, loading: { ...m.loading, stage3: true } } : m
-              );
-              return { ...conv, messages };
-            });
+            markLoading('stage3');
             break;
 
           case 'stage3_complete':
-            updateConvById(conversationId, conv => {
-              const messages = conv.messages.map((m, i) =>
+            updateConvById(conversationId, conv => ({
+              ...conv,
+              messages: conv.messages.map((m, i) =>
                 i === conv.messages.length - 1
                   ? { ...m, stage3: event.data, loading: { ...m.loading, stage3: false }, timestamp: new Date().toISOString() }
                   : m
-              );
-              return { ...conv, messages };
-            });
+              ),
+            }));
             break;
 
           case 'title_complete':
@@ -296,45 +364,44 @@ function App() {
 
           case 'complete':
             loadConversations();
-            setLoadingIds(prev => { const next = new Set(prev); next.delete(conversationId); return next; });
+            removeLoadingIds();
             triggerToast(conversationId);
             break;
 
           case 'error':
-            console.error('Stream error:', event.message);
-            setLoadingIds(prev => { const next = new Set(prev); next.delete(conversationId); return next; });
+            removeLoadingIds();
+            triggerErrorToast(event.message || 'Something went wrong. Please try again.');
             break;
-
-          default:
-            console.log('Unknown event type:', eventType);
         }
       }, abortController.signal);
     } catch (error) {
       if (error.name !== 'AbortError') {
-        console.error('Failed to send message:', error);
+        triggerErrorToast('Failed to reach the council. Please check your connection.');
+        // Roll back the optimistic messages on hard failure
         updateConvById(conversationId, conv => ({
           ...conv,
           messages: conv.messages.slice(0, -2),
         }));
       } else {
-        // Explicitly clear all loading spinners and indicate stopped
+        // Clear spinners and show stopped state
         updateConvById(conversationId, conv => ({
           ...conv,
-          messages: conv.messages.map((m, i) =>
-            i === conv.messages.length - 1
-              ? {
-                  ...m,
-                  loading: { stage1: false, stage2: false, stage3: false },
-                  stage3: m.stage3 ? m.stage3 : {
-                    model: "system",
-                    response: (m.stage2 || m.stage1 ? "*Generation stopped by user*" : "*Generation stopped before receiving response*")
-                  }
-                }
-              : m
-          ),
+          messages: conv.messages.map((m, i) => {
+            if (i !== conv.messages.length - 1) return m;
+            return {
+              ...m,
+              loading: { stage1: false, stage2: false, stage3: false },
+              stage3: m.stage3 ? m.stage3 : {
+                model: 'system',
+                response: (m.stage2 || m.stage1)
+                  ? '*Generation stopped by user*'
+                  : '*Generation stopped before receiving response*',
+              },
+            };
+          }),
         }));
       }
-      setLoadingIds(prev => { const next = new Set(prev); next.delete(conversationId); return next; });
+      removeLoadingIds();
     } finally {
       delete abortControllersRef.current[conversationId];
     }
@@ -344,14 +411,15 @@ function App() {
     abortControllersRef.current[conversationId]?.abort();
   };
 
-  // Determine current page key for AnimatePresence
-  const pageKey = !authUser && !showAuth ? 'landing' : !authUser ? 'auth' : 'app';
+  /* ── Render ────────────────────────────────────────────────────────────── */
+
+  const pageKey = !authUser && !isShowingAuth ? 'landing' : !authUser ? 'auth' : 'app';
 
   return (
     <AnimatePresence mode="wait">
       {pageKey === 'landing' && (
-        <motion.div key="landing" {...pageFade} style={{ width: '100vw', height: '100vh' }}>
-          <LandingPage onGetStarted={() => setShowAuth(true)} theme={theme} toggleTheme={toggleTheme} />
+        <motion.div key="landing" {...PAGE_FADE} style={{ width: '100vw', height: '100vh' }}>
+          <LandingPage onGetStarted={() => setIsShowingAuth(true)} theme={theme} toggleTheme={toggleTheme} />
         </motion.div>
       )}
 
@@ -363,7 +431,7 @@ function App() {
           exit={{ opacity: 0, y: -20, transition: { duration: 0.25, ease: 'easeIn' } }}
           style={{ width: '100vw', height: '100vh' }}
         >
-          <AuthPage onAuth={handleAuth} onBack={() => setShowAuth(false)} />
+          <AuthPage onAuth={handleAuth} onBack={() => setIsShowingAuth(false)} />
         </motion.div>
       )}
 
@@ -379,18 +447,32 @@ function App() {
             <AnimatePresence>
               {toast && (
                 <motion.div
-                  className="toast"
+                  className={`toast ${toast.type === 'error' ? 'toast-error' : ''}`}
                   initial={{ opacity: 0, y: 16, scale: 0.95 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 16, scale: 0.95 }}
                   transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
-                  <img src="/Logo.png" alt="" className="toast-icon" />
-                  <span>Response ready{toast.conversationId !== currentConversationId ? ` in "${toast.title}"` : ''}</span>
-                  {toast.conversationId !== currentConversationId && (
+                  {toast.type === 'error' ? (
+                    <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18" style={{ flexShrink: 0, color: '#ff6b6b' }}>
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                  ) : (
+                    <img src="/Logo.png" alt="" className="toast-icon" />
+                  )}
+                  <span>
+                    {toast.type === 'error'
+                      ? toast.message
+                      : <>Response ready{toast.conversationId !== currentConversationId ? ` in "${toast.title}"` : ''}</>
+                    }
+                  </span>
+                  {toast.type !== 'error' && toast.conversationId !== currentConversationId && (
                     <button
                       className="toast-link"
-                      onClick={() => { handleSelectConversation(toast.conversationId); setToast(null); }}
+                      onClick={() => {
+                        handleSelectConversation(toast.conversationId);
+                        setToast(null);
+                      }}
                     >
                       View →
                     </button>
@@ -398,6 +480,7 @@ function App() {
                 </motion.div>
               )}
             </AnimatePresence>
+
             <Settings
               isOpen={isSettingsOpen}
               onClose={() => setIsSettingsOpen(false)}
@@ -409,6 +492,7 @@ function App() {
               toggleTheme={toggleTheme}
               onSignOut={handleLogout}
             />
+
             <Sidebar
               conversations={conversations}
               currentConversationId={currentConversationId}
@@ -419,17 +503,19 @@ function App() {
               isOpen={isSidebarOpen}
               toggleSidebar={toggleSidebar}
               loadingIds={loadingIds}
+              isLoading={isConversationsLoading}
               userName={userName}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onGoHome={() => setCurrentConversationId(null)}
             />
+
             <div className="main-content">
               <ChatInterface
                 conversation={currentConversation}
                 onSendMessage={handleSendMessage}
                 onStartConversation={handleStartConversation}
                 onCloseChat={() => setCurrentConversationId(null)}
-                isLoading={isLoading}
+                isLoading={isCurrentConvLoading}
                 userInitial={userName.trim().charAt(0).toUpperCase()}
                 firstName={firstName}
                 isNewUser={isNewUser}
@@ -442,5 +528,7 @@ function App() {
     </AnimatePresence>
   );
 }
+
+/* ─── Exports ────────────────────────────────────────────────────────────── */
 
 export default App;

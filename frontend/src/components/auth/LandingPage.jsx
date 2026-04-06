@@ -164,7 +164,7 @@ function LandingPage({ onGetStarted, theme, toggleTheme }) {
       {/* How It Works */}
       <section className="landing-section" id="how-it-works">
         <p className="section-label">How It Works</p>
-        <h2 className="section-title">Three stages. One answer.</h2>
+        <h2 className="section-title">Four stages. One answer.</h2>
         <p className="section-subtitle">
           Every query passes through a rigorous deliberation pipeline, combining the strengths of multiple models.
         </p>
@@ -185,9 +185,16 @@ function LandingPage({ onGetStarted, theme, toggleTheme }) {
           </div>
           <div className="step-card">
             <div className="step-number">3</div>
+            <h3 className="step-title">Council Review</h3>
+            <p className="step-desc">
+              An independent reviewer model critiques the deliberation record, summarizing points of agreement and divergence across all council members.
+            </p>
+          </div>
+          <div className="step-card">
+            <div className="step-number">4</div>
             <h3 className="step-title">Chairman Synthesis</h3>
             <p className="step-desc">
-              A designated chairman model synthesizes all responses and peer reviews into a single, calibrated final answer with confidence scoring.
+              A fine-tuned chairman model reads all responses, peer rankings, and the council review to produce a single, calibrated final answer.
             </p>
           </div>
         </div>
